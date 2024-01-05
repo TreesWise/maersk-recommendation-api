@@ -1,9 +1,54 @@
 import pandas as pd
-from tabulate import tabulate
+import numpy as np
+import re
+
+def custom_normalize_neg_weight_single(df, column_name, weightage):
+    if column_name not in df.columns:
+        raise ValueError(f"Column '{column_name}' not found in the DataFrame.")
+
+    normalized_column_name = f'NORM_{column_name}'
+
+    # Assign values based on the specified conditions
+    df[normalized_column_name] = df[column_name].apply(
+        lambda x: round(-weightage if x != 0 else 0, 3)
+    )
+    return df
+
+
+
+def reverse_normalize_by_group(df, group_columns, column_name, weightage):
+    if column_name not in df.columns or any(col not in df.columns for col in group_columns):
+        raise ValueError(f"Column '{column_name}' or one of the group columns not found in the DataFrame.")
+
+    reverse_normalize = lambda x: round(1 - ((x - x.min()) / max((x.max() - x.min()), 1)), 3)
+
+    normalized_column_name = f'NORM_{column_name}'
+
+    # Concatenate values of group columns to create a new temporary column for grouping
+    df['TEMP_GROUP'] = df[group_columns].astype(str).agg('-'.join, axis=1)
+
+    # Apply reverse normalization with weightage to all groups
+    df[normalized_column_name] = df.groupby('TEMP_GROUP')[column_name].transform(
+        lambda x: reverse_normalize(x) * weightage if len(x) > 1 else weightage
+    )
+
+    # Drop the temporary column after normalization
+    df.drop('TEMP_GROUP', axis=1, inplace=True)
+
+    return df
+
+
+
+def clean_item_name(item):
+
+    # Remove special characters (excluding letters, digits, spaces, and hyphens)
+    cleaned_item = re.sub(r'[^a-zA-Z0-9\s-]', ' ', item)
+    # Replace multiple spaces with a single space
+    cleaned_item = re.sub(r'\s+', ' ', cleaned_item)
+    return cleaned_item.strip()
+
 
 def preprocessing_dataframe(df):
-    # df= pd.read_csv("IMPA_ITEMS_WITH_PORT.csv",encoding='latin-1')
-    import numpy as np
     df['RECEIPT_DATE'] = df['RECEIPT_DATE'].apply(lambda x: str(x).split(' ', 1)[0] if ' ' in str(x) else str(x))
     df['RECEIPT_DATE'] = pd.to_datetime(df['RECEIPT_DATE'], format='%d-%m-%Y')
     df['RECEIPT_DATE'] = df['RECEIPT_DATE'].dt.date
@@ -42,9 +87,9 @@ def preprocessing_dataframe(df):
                                         df_without_outliers['UNIT_PRICE'] * df_without_outliers['AC_QTY'])
     df_without_outliers['TOTALAMOUNT'] = df_without_outliers['TOTALAMOUNT'].round(2)
     weightage_unit_price = 0.10  # Adjust the weightage as needed
-    df_normalized_unit_price = reverse_normalize_by_group(df_without_outliers, 'ITEM_PROCESSED', 'UNIT_PRICE', weightage_unit_price)
+    df_normalized_unit_price = reverse_normalize_by_group(df_without_outliers, ['PORT_NAME', 'ITEM_PROCESSED'], 'UNIT_PRICE', weightage_unit_price)
     lead_time_weightage= .15
-    df_normalized_lead_time = reverse_normalize_by_group(df_normalized_unit_price, 'ITEM_PROCESSED', 'LEAD_DAYS', lead_time_weightage)
+    df_normalized_lead_time = reverse_normalize_by_group(df_normalized_unit_price, ['PORT_NAME', 'ITEM_PROCESSED'], 'LEAD_DAYS', lead_time_weightage)
     weightage_item_no_stock = 0.375
     df_normalized_no_item_stock = custom_normalize_neg_weight_single(df_normalized_lead_time, 'ITEM_NO_STOCK', weightage_item_no_stock)
     weightage_item_qc_not_ok = 0.375
@@ -52,128 +97,51 @@ def preprocessing_dataframe(df):
     df_normalized['OVERALL_SCORE'] = df_normalized[['NORM_UNIT_PRICE', 'NORM_LEAD_DAYS', 'NORM_ITEM_NO_STOCK', 'NORM_ITEM_QC_NOT_OK']].sum(axis=1).round(3)
     return df_normalized
 
-def clean_item_name(item):
-    import re
-    # Remove special characters (excluding letters, digits, spaces, and hyphens)
-    cleaned_item = re.sub(r'[^a-zA-Z0-9\s-]', ' ', item)
-    # Replace multiple spaces with a single space
-    cleaned_item = re.sub(r'\s+', ' ', cleaned_item)
-    return cleaned_item.strip()
 
-def reverse_normalize_by_group(df, group_column, column_name, weightage):
-    
-    if column_name not in df.columns or group_column not in df.columns:
-        raise ValueError(f"Column '{column_name}' or '{group_column}' not found in the DataFrame.")
 
-    reverse_normalize = lambda x: round(1 - ((x - x.min()) / max((x.max() - x.min()), 1)), 3)
-
-    normalized_column_name = f'NORM_{column_name}'
-
-    df[normalized_column_name] = df.groupby(group_column)[column_name].transform(
-        lambda x: round(reverse_normalize(x) * weightage, 3)
-    )
-    return df
-
-def get_vendor_rankings(df):
+def get_vendor_ranking(df):
     # Assuming df is your DataFrame
-    df['PO_APPROVED_MONTH'] = df['PO_APPROVED_MONTH'].astype(str)
-    df['PO_APPROVED_YEAR'] = df['PO_APPROVED_YEAR'].astype(str)
 
-    # Concatenate 'PO_APPROVED_YEAR' and 'PO_APPROVED_MONTH' to create a quarter column
-    df['QUARTER'] = (df['PO_APPROVED_MONTH'].astype(int) - 1) // 3 + 1
-    df['QUARTER'] = df['PO_APPROVED_YEAR'] + 'Q' + df['QUARTER'].astype(str)
+    # Convert 'OVERALL_SCORE' to numeric (in case it's not already)
+    df['OVERALL_SCORE'] = pd.to_numeric(df['OVERALL_SCORE'], errors='coerce')
 
-    # Convert 'PO_APPROVED_YEAR' and 'PO_APPROVED_MONTH' to datetime for better sorting
-    df['DATE'] = pd.to_datetime(df['PO_APPROVED_YEAR'] + '-' + df['PO_APPROVED_MONTH'])
+    # Group by 'PORT_NAME' and 'VENDOR' and calculate the sum of OVERALL_SCORE for each vendor within each port
+    vendor_sum = df.groupby(['PORT_NAME', 'VENDOR'])['OVERALL_SCORE'].sum().reset_index()
 
-    # Group by 'VENDOR', 'PO_APPROVED_YEAR', 'PO_APPROVED_MONTH', 'DATE' and calculate the sum of the numeric representation
-    # monthly_ranking = df.groupby(['VENDOR', 'PO_APPROVED_YEAR', 'PO_APPROVED_MONTH', 'DATE'])['OVERALL_SCORE'].sum().reset_index()
+    # Sort DataFrame by 'PORT_NAME' and 'OVERALL_SCORE_SUM' in descending order
+    vendor_sum = vendor_sum.sort_values(by=['PORT_NAME', 'OVERALL_SCORE'], ascending=[True, False])
 
-    # # Calculate the maximum and minimum values for each time period
-    # max_min_values = monthly_ranking.groupby(['PO_APPROVED_YEAR', 'PO_APPROVED_MONTH'])['OVERALL_SCORE'].agg(['max', 'min']).reset_index()
+    # Create a 'RANK' column within each port group
+    vendor_sum['RANK'] = vendor_sum.groupby(['PORT_NAME'])['OVERALL_SCORE'].rank(ascending=False, method='dense')
 
-    # # Merge with monthly_ranking to have max and min values for each row
-    # monthly_ranking = pd.merge(monthly_ranking, max_min_values, on=['PO_APPROVED_YEAR', 'PO_APPROVED_MONTH'], how='left', suffixes=('', '_MAX_MIN'))
+    # Assign ratings based on the rank
+    def assign_rating(row):
+        total_vendors = row['PORT_COUNT']
+        if total_vendors == 1:
+            return '★★★★★'
+        else:
+        
+            rating_scale = 4  # Number of stars between ★ and ★★★★★ (excluding both)
+            relative_position = (row['RANK'] - 1) / (total_vendors - 1)
+            stars = round(relative_position * rating_scale) + 1
+            return '★' * stars
+    # Merge the ranking information with the original DataFrame
+    df = pd.merge(df, vendor_sum[['PORT_NAME', 'VENDOR', 'RANK']], on=['PORT_NAME', 'VENDOR'], how='left')
 
-    # # Create star levels based on max and min values
-    # monthly_ranking['RATING'] = pd.qcut(
-    #     monthly_ranking['OVERALL_SCORE'],
-    #     q=[0, 0.2, 0.4, 0.6, 0.8, 1],
-    #     labels=['★', '★★', '★★★', '★★★★', '★★★★★'],
-    #     duplicates='drop'
-    # )
+    # Calculate the count of vendors for each port
+    df['PORT_COUNT'] = df.groupby('PORT_NAME')['VENDOR'].transform('nunique')
+    # Apply the rating assignment function
+    df['RATING'] = df.apply(assign_rating, axis=1)
 
-    # Sort the results using the custom order
-    # monthly_ranking = monthly_ranking.sort_values(by=['PO_APPROVED_YEAR', 'PO_APPROVED_MONTH']).reset_index(drop=True)
+    # Display the results
+    df_result = df[['VENDOR', 'PORT_NAME', 'RANK', 'RATING']].drop_duplicates(subset=['VENDOR', 'PORT_NAME'])
+    # print(df_result)
 
-    # Display the results for monthly ranking with stars
-    # print("\nMonthly Ranking:")
-    # print(tabulate(monthly_ranking[monthly_ranking['VENDOR'] == vendor_name][['VENDOR', 'PO_APPROVED_YEAR', 'PO_APPROVED_MONTH', 'RATING']], headers='keys', tablefmt='pretty', showindex=False))
+    return df_result
 
-    # Group by 'VENDOR', 'QUARTER' and calculate the sum of the numeric representation
-    # quarterly_ranking = df.groupby(['VENDOR', 'QUARTER'])['OVERALL_SCORE'].sum().reset_index()
 
-    # # Calculate the maximum and minimum values for each time period
-    # max_min_values = quarterly_ranking.groupby(['QUARTER'])['OVERALL_SCORE'].agg(['max', 'min']).reset_index()
-
-    # # Merge with quarterly_ranking to have max and min values for each row
-    # quarterly_ranking = pd.merge(quarterly_ranking, max_min_values, on=['QUARTER'], how='left', suffixes=('', '_MAX_MIN'))
-
-    # # Create star levels based on max and min values
-    # quarterly_ranking['RATING'] = pd.qcut(
-    #     quarterly_ranking['OVERALL_SCORE'],
-    #     q=[0, 0.2, 0.4, 0.6, 0.8, 1],
-    #     labels=['★', '★★', '★★★', '★★★★', '★★★★★'],
-    #     duplicates='drop'
-    # )
-
-    # Sort the results using the custom order
-    # quarterly_ranking = quarterly_ranking.sort_values(by=['QUARTER']).reset_index(drop=True)
-
-    # Display the results for quarterly ranking with stars
-    # print("\nQuarterly Ranking:")
-    # print(tabulate(quarterly_ranking[quarterly_ranking['VENDOR'] == vendor_name][['VENDOR', 'QUARTER', 'RATING']], headers='keys', tablefmt='pretty', showindex=False))
-
-    # Group by 'VENDOR', 'PO_APPROVED_YEAR' and calculate the sum of the numeric representation
-    yearly_ranking = df.groupby(['VENDOR','PORT_NAME'])['OVERALL_SCORE'].sum().reset_index()
-
-    # Calculate the maximum and minimum values for each time period
-    max_min_values = yearly_ranking.groupby(['PORT_NAME'])['OVERALL_SCORE'].agg(['max', 'min']).reset_index()
-
-    # Merge with yearly_ranking to have max and min values for each row
-    yearly_ranking = pd.merge(yearly_ranking, max_min_values, on=['PORT_NAME'], how='left', suffixes=('', '_MAX_MIN'))
-
-    # Create star levels based on max and min values
-    yearly_ranking['RATING'] = pd.qcut(
-        yearly_ranking['OVERALL_SCORE'],
-        q=[0, 0.2, 0.4, 0.6, 0.8, 1],
-        labels=['★', '★★', '★★★', '★★★★', '★★★★★'],
-        duplicates='drop'
-    )
-
-    # Sort the results using the custom order
-    yearly_ranking = yearly_ranking.sort_values(by=['PORT_NAME']).reset_index(drop=True)
-
-    # Display the results for yearly ranking with stars
-    print("\nYearly Ranking:")
-    # print(tabulate(yearly_ranking[yearly_ranking['VENDOR'] == vendor_name][['VENDOR','RATING','PORT_NAME']], headers='keys', tablefmt='pretty', showindex=False))
-    return yearly_ranking
-
-def custom_normalize_neg_weight_single(df, column_name, weightage):
-    if column_name not in df.columns:
-        raise ValueError(f"Column '{column_name}' not found in the DataFrame.")
-
-    normalized_column_name = f'NORM_{column_name}'
-
-    # Assign values based on the specified conditions
-    df[normalized_column_name] = df[column_name].apply(
-        lambda x: round(-weightage if x != 0 else 0, 3)
-    )
-    return df
 
 def supplier_evaluation(df,vendor):
-    import re
-    import numpy as np
     df_normalized =preprocessing_dataframe(df)
     df_normalized['item_price'] = df_normalized['PO_QTY'] * df_normalized['UNIT_PRICE']
     output_frame = pd.DataFrame() 
@@ -206,7 +174,6 @@ def supplier_evaluation(df,vendor):
         itm_unit_price = []
         itm_lead_time = []
         # itm_port = []
-        itm_rec_date = []
         list_1 = []
         for itm1 in item:
             itm_unit_price.append(df_subset[df_subset['ITEM_processed']==itm1]['UNIT_PRICE'].apply(lambda x:np.max(x)).values[0])
@@ -231,11 +198,11 @@ def supplier_evaluation(df,vendor):
     output_frame.sort_values(by='vendor_total_price_sum', inplace=True, ascending=False)
     output_frame.drop(columns=['vendor_total_price_sum'],inplace=True)
     output_frame.reset_index(drop=True, inplace=True)
-    vendor_ratings_df = get_vendor_rankings(df_normalized)
+    vendor_ratings_df = get_vendor_ranking(df_normalized)
     vendor_ratings_df = vendor_ratings_df[vendor_ratings_df['VENDOR']==vendor]
     vendor_ratings_df.rename(columns={'PORT_NAME':'Port','VENDOR':'Vendor'},inplace=True)
     # output_frame = pd.concat([output_frame,vendor_ratings_df[['PORT_NAME','RATING']]],join='left',axis=0)
     output_frame = pd.merge(output_frame,vendor_ratings_df,on = 'Port')
     output_frame = output_frame.rename(columns={'Vendor_x': 'Vendor'})
-    output_frame.drop(columns=['OVERALL_SCORE','max','min','Vendor_y'],inplace=True)
+    output_frame.drop(columns=['Vendor_y','RANK'],inplace=True)
     return output_frame
