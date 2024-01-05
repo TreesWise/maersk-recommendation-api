@@ -18,14 +18,14 @@ from spend_analysis_function import spend_analysis
 from trend_analysis_function import port_item_count_port
 from supplier_evaluation_function import supplier_evaluation
 import re
-import nltk
-nltk.download('punkt')
-nltk.download('stopwords')
-from nltk.stem import PorterStemmer
-from Levenshtein import seqratio
-from nltk.tokenize import word_tokenize
-from functools import reduce
-import re
+# import nltk
+# nltk.download('punkt')
+# nltk.download('stopwords')
+# from nltk.stem import PorterStemmer
+# from Levenshtein import seqratio
+# from nltk.tokenize import word_tokenize
+# from functools import reduce
+# import re
 #connection
 container_client = ContainerClient.from_connection_string(
     'DefaultEndpointsProtocol=https;AccountName=treewiseblobstorage;AccountKey=jE3f/ogf+EH2cZyJEEagULdbWrIFvtKOnJB655pvrSn+9jzniIx8hGjHlBvnb3Py2I6h7b5zO2NO+AStfk0NPA==;EndpointSuffix=core.windows.net', container_name='maersk-vendor-recommendation-db')
