@@ -42,3 +42,4 @@ fastparquet
 regex
 nltk==3.8.1
 python-Levenshtein==0.21.1
+tabulate
