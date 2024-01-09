@@ -97,7 +97,6 @@ def preprocessing_dataframe(df):
     return df_normalized
 
 import pandas as pd
-from scipy.stats import percentileofscore
 
 def get_vendor_ranking(df):
     # Assuming df is your DataFrame
