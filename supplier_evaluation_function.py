@@ -196,7 +196,7 @@ def supplier_evaluation(df,vendor):
     vendor_ratings_df.rename(columns={'PORT_NAME':'Port','VENDOR':'Vendor'},inplace=True)
     for irow in range(len(output_frame)):
         output_frame.loc[irow,'Rating'] = list(vendor_ratings_df[(vendor_ratings_df['Vendor']==output_frame.loc[irow,'Vendor'])&(vendor_ratings_df['Port']==output_frame.loc[irow,'Port'])]['RATING'])[0]
-    return output_frame.to_dict(orient='records')
+    return output_frame
 
 
 #  5 seconds faster in execution
