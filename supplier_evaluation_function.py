@@ -15,7 +15,6 @@ def custom_normalize_neg_weight_single(df, column_name, weightage):
     return df
 
 
-
 def reverse_normalize_by_group(df, group_columns, column_name, weightage):
     if column_name not in df.columns or any(col not in df.columns for col in group_columns):
         raise ValueError(f"Column '{column_name}' or one of the group columns not found in the DataFrame.")
@@ -97,71 +96,73 @@ def preprocessing_dataframe(df):
     df_normalized['OVERALL_SCORE'] = df_normalized[['NORM_UNIT_PRICE', 'NORM_LEAD_DAYS', 'NORM_ITEM_NO_STOCK', 'NORM_ITEM_QC_NOT_OK']].sum(axis=1).round(3)
     return df_normalized
 
-
+import pandas as pd
+from scipy.stats import percentileofscore
 
 def get_vendor_ranking(df):
     # Assuming df is your DataFrame
 
     # Convert 'OVERALL_SCORE' to numeric (in case it's not already)
     df['OVERALL_SCORE'] = pd.to_numeric(df['OVERALL_SCORE'], errors='coerce')
+    df['RATING'] = ''
+    # Group by 'PORT_NAME' and 'VENDOR' and calculate the sum of OVERALL_SCORE and the total number of orders for each vendor within a given port
+    vendor_sum = df.groupby(['PORT_NAME', 'VENDOR']).agg(
+        OVERALL_SCORE_SUM=('OVERALL_SCORE', 'sum'),
+        VENDOR_COUNT=('VENDOR', 'count')
+    ).reset_index()    
 
-    # Group by 'PORT_NAME' and 'VENDOR' and calculate the sum of OVERALL_SCORE for each vendor within each port
-    vendor_sum = df.groupby(['PORT_NAME', 'VENDOR'])['OVERALL_SCORE'].sum().reset_index()
-
-    # Sort DataFrame by 'PORT_NAME' and 'OVERALL_SCORE_SUM' in descending order
-    vendor_sum = vendor_sum.sort_values(by=['PORT_NAME', 'OVERALL_SCORE'], ascending=[True, False])
-
+    # Sort DataFrame by 'PORT_NAME' and 'OVERALL_SCORE' in descending order
+    vendor_overall_score_sum = vendor_sum.sort_values(by=['PORT_NAME', 'OVERALL_SCORE_SUM'], ascending=[True, False])
+    
     # Create a 'RANK' column within each port group
-    vendor_sum['RANK'] = vendor_sum.groupby(['PORT_NAME'])['OVERALL_SCORE'].rank(ascending=False, method='dense')
+    vendor_overall_score_sum['ORDER_RANK'] = vendor_overall_score_sum.groupby(['PORT_NAME'])['OVERALL_SCORE_SUM'].rank(ascending=False, method='dense')
+    vendor_overall_score_sum['VENDOR_COUNT_RANK'] = vendor_overall_score_sum.groupby(['PORT_NAME'])['VENDOR_COUNT'].rank(ascending=False, method='dense')
+    vendor_overall_score_sum = vendor_overall_score_sum.drop(columns=['OVERALL_SCORE_SUM', 'VENDOR_COUNT'])
 
-    # Assign ratings based on the rank
-    def assign_rating(row):
-        total_vendors = row['PORT_COUNT']
-        if total_vendors == 1:
-            return '★★★★★'
-        else:
-        
-            rating_scale = 4  # Number of stars between ★ and ★★★★★ (excluding both)
-            relative_position = (row['RANK'] - 1) / (total_vendors - 1)
-            stars = round(relative_position * rating_scale) + 1
-            return '★' * stars
-    # Merge the ranking information with the original DataFrame
-    df = pd.merge(df, vendor_sum[['PORT_NAME', 'VENDOR', 'RANK']], on=['PORT_NAME', 'VENDOR'], how='left')
+    # Calculate combined percentile
+    vendor_overall_score_sum['COMBINED_RANK'] = (vendor_overall_score_sum['ORDER_RANK'] + vendor_overall_score_sum['VENDOR_COUNT_RANK']) / 2
+    vendor_overall_score_sum['COMBINED_PERCENTILE'] = vendor_overall_score_sum.groupby(['PORT_NAME'])['COMBINED_RANK'].transform(
+        lambda x: x.rank(ascending=False, method='dense') / x.nunique()
+    )
 
-    # Calculate the count of vendors for each port
-    df['PORT_COUNT'] = df.groupby('PORT_NAME')['VENDOR'].transform('nunique')
-    # Apply the rating assignment function
-    df['RATING'] = df.apply(assign_rating, axis=1)
+    # Map the percentile to star rating
+    def get_star_rating(percentile):
+        stars = min(int(percentile * 5) + 1, 5)  # Map percentile to stars, cap at 5 stars
+        return '★' * stars
 
-    # Display the results
-    df_result = df[['VENDOR', 'PORT_NAME', 'RANK', 'RATING']].drop_duplicates(subset=['VENDOR', 'PORT_NAME'])
-    # print(df_result)
+    # Apply the star rating logic to the main DataFrame
+    df = pd.merge(df, vendor_overall_score_sum[['PORT_NAME', 'VENDOR', 'COMBINED_PERCENTILE','ORDER_RANK','VENDOR_COUNT_RANK']], on=['PORT_NAME', 'VENDOR'], how='left')
+    df['RATING'] = df['COMBINED_PERCENTILE'].apply(get_star_rating)
 
-    return df_result
+    # Drop temporary columns if needed
+    # df = df.drop(columns=['COMBINED_PERCENTILE', 'COMBINED_RANK', 'ORDER_RANK', 'VENDOR_COUNT_RANK'])
+    df=df[['PORT_NAME','VENDOR','RATING']]
+    return df
 
 
-
+#  5 seconds slower in execution
 def supplier_evaluation(df,vendor):
+    import re
+    import numpy as np
     df_normalized =preprocessing_dataframe(df)
+    vendor_ratings_df = get_vendor_ranking(df_normalized)
     df_normalized['item_price'] = df_normalized['PO_QTY'] * df_normalized['UNIT_PRICE']
     output_frame = pd.DataFrame() 
     df_normalized.dropna(subset=['ITEM_SECTION_1','ITEM_SECTION_2','UNIT_PRICE','PO_QTY','RECEIPT_DATE','PO_APPROVED_YEAR','PORT_NAME','UNIT_PRICE'],inplace=True)
     df_normalized.drop_duplicates(inplace=True)
     df_normalized['RECEIPT_DATE'] = pd.to_datetime(df_normalized['RECEIPT_DATE'],format='%d-%m-%Y %H:%M',errors='coerce')
-    items_dict = {}
-    for i in df_normalized['ITEM'].unique():
-        k = re.sub(r'\W',' ',i).lower()
-        lwr_k = re.sub(r'\s{2,}',' ',k).strip()
-        items_dict[i] = lwr_k
-    items_dict_rev = {v1:k1 for k1,v1 in items_dict.items()}
-    df_normalized['ITEM_processed'] = df_normalized['ITEM'].replace(items_dict)
-    df_normalized['ITEM_processed']
+    # for i in df_normalized['ITEM'].unique():
+    #     k = re.sub(r'\W',' ',i).lower()
+    #     lwr_k = re.sub(r'\s{2,}',' ',k).strip()
+    #     items_dict[i] = lwr_k
+    items_dict_rev = {df_normalized.loc[row[0],'ITEM_PROCESSED']:df_normalized.loc[row[0],'ITEM'] for row in df_normalized.iterrows()}
+    # df_normalized['ITEM_processed'] = df_normalized['ITEM'].replace(items_dict)
+    # df_normalized['ITEM_processed']
     # if item != None:
     #     item_proc = re.sub(r'\W',' ',item).lower()
     #     item_proc = re.sub(r'\s{2,}',' ',item_proc).strip()
     # df_normalized = df_normalized[(df_normalized['VENDOR'] == vendor)]
     df_normalized = df_normalized[df_normalized['VENDOR'] == vendor]
-
     for port in df_normalized['PORT_NAME'].value_counts().head(10).keys():
         df_subset = df_normalized[df_normalized['PORT_NAME'] == port]
         
@@ -170,39 +171,97 @@ def supplier_evaluation(df,vendor):
         # unit_price = list(df_subset['UNIT_PRICE'])[0]
         # unique_PO_CODE = df_subset['PO_CODE'].nunique()
         
-        item = list(dict(df_subset['ITEM_processed'].value_counts().head(10)).keys())
+        item = list(dict(df_subset['ITEM_PROCESSED'].value_counts().head(10)).keys())
         itm_unit_price = []
         itm_lead_time = []
         # itm_port = []
+        itm_rec_date = []
         list_1 = []
         for itm1 in item:
-            itm_unit_price.append(df_subset[df_subset['ITEM_processed']==itm1]['UNIT_PRICE'].apply(lambda x:np.max(x)).values[0])
-            itm_lead_time.append(df_subset[df_subset['ITEM_processed']==itm1]['LEAD_DAYS'].apply(lambda x:np.mean(x)).values[0])
-            list_1.append(df_subset[df_subset['ITEM_processed']==itm1]['item_price'].sum())
-        itm_port = list(df_subset[df_subset['ITEM_processed']==itm1]['PORT_NAME'])[0]
+            itm_unit_price.append(df_subset[df_subset['ITEM_PROCESSED']==itm1]['UNIT_PRICE'].apply(lambda x:np.max(x)).values[0])
+            itm_lead_time.append(df_subset[df_subset['ITEM_PROCESSED']==itm1]['LEAD_DAYS'].apply(lambda x:np.mean(x)).values[0])
+            list_1.append(df_subset[df_subset['ITEM_PROCESSED']==itm1]['item_price'].sum())
+        itm_port = list(df_subset[df_subset['ITEM_PROCESSED']==itm1]['PORT_NAME'])[0]
 
-            # itm_rec_date.append(list(df_subset[df_subset['ITEM_processed']==itm1]['RECEIPT_DATE'])[0])
-            
-        
+            # itm_rec_date.append(list(df_subset[df_subset['ITEM_processed']==itm1]['RECEIPT_DATE'])[0])        
         item = [items_dict_rev[ity] for ity in item]
         dff_sub = pd.DataFrame({'Vendor': [vendor], 'Port': ['p'], 'Mean_Lead_Time': ['c'], 'Item': [item], 'Total_Price per item': ['a']},index=[0])
         dff_sub.at[0,'Item'] = item
         # dff_sub.at[0,'max_unit_price'] = itm_unit_price
-
         dff_sub.at[0,'Mean_Lead_Time'] = itm_lead_time
         dff_sub.at[0,'Port'] = itm_port
         dff_sub.at[0,'Total_Price per item'] = list_1
         # dff_sub.at[0,'receipt date'] = itm_rec_date
-        output_frame = pd.concat([output_frame,dff_sub]).head(20)
+        output_frame = pd.concat([output_frame,dff_sub])#.head(20)
     output_frame['vendor_total_price_sum'] = [np.sum(xx) for xx in output_frame['Total_Price per item']]
     output_frame.sort_values(by='vendor_total_price_sum', inplace=True, ascending=False)
     output_frame.drop(columns=['vendor_total_price_sum'],inplace=True)
     output_frame.reset_index(drop=True, inplace=True)
-    vendor_ratings_df = get_vendor_ranking(df_normalized)
-    vendor_ratings_df = vendor_ratings_df[vendor_ratings_df['VENDOR']==vendor]
     vendor_ratings_df.rename(columns={'PORT_NAME':'Port','VENDOR':'Vendor'},inplace=True)
-    # output_frame = pd.concat([output_frame,vendor_ratings_df[['PORT_NAME','RATING']]],join='left',axis=0)
-    output_frame = pd.merge(output_frame,vendor_ratings_df,on = 'Port')
-    output_frame = output_frame.rename(columns={'Vendor_x': 'Vendor'})
-    output_frame.drop(columns=['Vendor_y','RANK'],inplace=True)
-    return output_frame
+    for irow in range(len(output_frame)):
+        output_frame.loc[irow,'Rating'] = list(vendor_ratings_df[(vendor_ratings_df['Vendor']==output_frame.loc[irow,'Vendor'])&(vendor_ratings_df['Port']==output_frame.loc[irow,'Port'])]['RATING'])[0]
+    return output_frame.to_dict(orient='records')
+
+
+#  5 seconds faster in execution
+# def supplier_evaluation(df,vendor):
+#     import re
+#     import numpy as np
+#     df_normalized =preprocessing_dataframe(df)
+#     vendor_ratings_df = get_vendor_ranking(df_normalized)
+#     df_normalized['item_price'] = df_normalized['PO_QTY'] * df_normalized['UNIT_PRICE']
+#     output_frame = pd.DataFrame() 
+#     df_normalized.dropna(subset=['ITEM_SECTION_1','ITEM_SECTION_2','UNIT_PRICE','PO_QTY','RECEIPT_DATE','PO_APPROVED_YEAR','PORT_NAME','UNIT_PRICE'],inplace=True)
+#     df_normalized.drop_duplicates(inplace=True)
+#     df_normalized['RECEIPT_DATE'] = pd.to_datetime(df_normalized['RECEIPT_DATE'],format='%d-%m-%Y %H:%M',errors='coerce')
+#     items_dict = {}
+#     for i in df_normalized['ITEM'].unique():
+#         k = re.sub(r'\W',' ',i).lower()
+#         lwr_k = re.sub(r'\s{2,}',' ',k).strip()
+#         items_dict[i] = lwr_k
+#     items_dict_rev = {v1:k1 for k1,v1 in items_dict.items()}
+#     df_normalized['ITEM_PROCESSED'] = df_normalized['ITEM'].replace(items_dict)
+#     # df_normalized['ITEM_processed']
+#     # if item != None:
+#     #     item_proc = re.sub(r'\W',' ',item).lower()
+#     #     item_proc = re.sub(r'\s{2,}',' ',item_proc).strip()
+#     # df_normalized = df_normalized[(df_normalized['VENDOR'] == vendor)]
+#     df_normalized = df_normalized[df_normalized['VENDOR'] == vendor]
+#     for port in df_normalized['PORT_NAME'].value_counts().head(10).keys():
+#         df_subset = df_normalized[df_normalized['PORT_NAME'] == port]
+        
+#         # po_qty_total = df_subset['PO_QTY'].sum()
+#         df_subset.sort_values(by='RECEIPT_DATE', ascending=False, inplace=True)
+#         # unit_price = list(df_subset['UNIT_PRICE'])[0]
+#         # unique_PO_CODE = df_subset['PO_CODE'].nunique()
+        
+#         item = list(dict(df_subset['ITEM_PROCESSED'].value_counts().head(10)).keys())
+#         itm_unit_price = []
+#         itm_lead_time = []
+#         # itm_port = []
+#         itm_rec_date = []
+#         list_1 = []
+#         for itm1 in item:
+#             itm_unit_price.append(df_subset[df_subset['ITEM_PROCESSED']==itm1]['UNIT_PRICE'].apply(lambda x:np.max(x)).values[0])
+#             itm_lead_time.append(df_subset[df_subset['ITEM_PROCESSED']==itm1]['LEAD_DAYS'].apply(lambda x:np.mean(x)).values[0])
+#             list_1.append(df_subset[df_subset['ITEM_PROCESSED']==itm1]['item_price'].sum())
+#         itm_port = list(df_subset[df_subset['ITEM_PROCESSED']==itm1]['PORT_NAME'])[0]
+
+#             # itm_rec_date.append(list(df_subset[df_subset['ITEM_processed']==itm1]['RECEIPT_DATE'])[0])        
+#         item = [items_dict_rev[ity] for ity in item]
+#         dff_sub = pd.DataFrame({'Vendor': [vendor], 'Port': ['p'], 'Mean_Lead_Time': ['c'], 'Item': [item], 'Total_Price per item': ['a']},index=[0])
+#         dff_sub.at[0,'Item'] = item
+#         # dff_sub.at[0,'max_unit_price'] = itm_unit_price
+#         dff_sub.at[0,'Mean_Lead_Time'] = itm_lead_time
+#         dff_sub.at[0,'Port'] = itm_port
+#         dff_sub.at[0,'Total_Price per item'] = list_1
+#         # dff_sub.at[0,'receipt date'] = itm_rec_date
+#         output_frame = pd.concat([output_frame,dff_sub])#.head(20)
+#     output_frame['vendor_total_price_sum'] = [np.sum(xx) for xx in output_frame['Total_Price per item']]
+#     output_frame.sort_values(by='vendor_total_price_sum', inplace=True, ascending=False)
+#     output_frame.drop(columns=['vendor_total_price_sum'],inplace=True)
+#     output_frame.reset_index(drop=True, inplace=True)
+#     vendor_ratings_df.rename(columns={'PORT_NAME':'Port','VENDOR':'Vendor'},inplace=True)
+#     for irow in range(len(output_frame)):
+#         output_frame.loc[irow,'Rating'] = list(vendor_ratings_df[(vendor_ratings_df['Vendor']==output_frame.loc[irow,'Vendor'])&(vendor_ratings_df['Port']==output_frame.loc[irow,'Port'])]['RATING'])[0]
+#     return output_frame.to_dict(orient='records')
