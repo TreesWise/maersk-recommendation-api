@@ -96,7 +96,6 @@ def preprocessing_dataframe(df):
     df_normalized['OVERALL_SCORE'] = df_normalized[['NORM_UNIT_PRICE', 'NORM_LEAD_DAYS', 'NORM_ITEM_NO_STOCK', 'NORM_ITEM_QC_NOT_OK']].sum(axis=1).round(3)
     return df_normalized
 
-import pandas as pd
 
 def get_vendor_ranking(df):
     # Assuming df is your DataFrame
@@ -141,8 +140,6 @@ def get_vendor_ranking(df):
 
 #  5 seconds slower in execution
 def supplier_evaluation(df,vendor):
-    import re
-    import numpy as np
     df_normalized =preprocessing_dataframe(df)
     vendor_ratings_df = get_vendor_ranking(df_normalized)
     df_normalized['item_price'] = df_normalized['PO_QTY'] * df_normalized['UNIT_PRICE']
