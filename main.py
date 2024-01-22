@@ -120,13 +120,20 @@ async def fetch_data(userinput: demand_forecasting_input, current_user: User = D
     return {'data': c}
 
 
+# def read_data_from_blob(dataset_name):
+#     try:
+#         content = container_client.download_blob(
+#             dataset_name).content_as_text(encoding='latin-1')
+#         data = pd.read_csv(StringIO(content))
+#         return data
+#     except Exception as e:
+#         print("Exception in reading from BLOB", e)
+#         raise HTTPException(
+#             status_code=404, detail='Error in reading data from blob storage')
 def read_data_from_blob(dataset_name):
     try:
-        content = container_client.download_blob(
-            dataset_name).content_as_text(encoding='latin-1')
-        data = pd.read_csv(StringIO(content))
+        data = pd.read_csv(StringIO(container_client.download_blob(dataset_name).content_as_text()))
         return data
     except Exception as e:
-        print("Exception in reading from BLOB", e)
-        raise HTTPException(
-            status_code=404, detail='Error in reading data from blob storage')
+        print("EXcception in reading from BLOB",e)
+        raise HTTPException(status_code=404, detail='Error in reading data from blob storage')
