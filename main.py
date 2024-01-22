@@ -115,9 +115,9 @@ async def fetch_data(userinput: demand_forecasting_input, current_user: User = D
     vessel_sub_type= userinput.vessel_sub_type
     df = read_data_from_blob("3.Demand_Forecasting_Items_Victualling_12_01_2023.csv")
     c = Demand_forecast(df, vessel_type, vessel_sub_type)
-    print(c)
-    result_dict = c.to_dict(orient='records')
-    return {'data': result_dict}
+    # print(c)
+    # result_dict = c.to_dict(orient='records')
+    return {'data': c}
 
 
 def read_data_from_blob(dataset_name):
