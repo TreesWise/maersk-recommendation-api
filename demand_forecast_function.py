@@ -28,7 +28,7 @@ def read_data_from_blob(dataset_name):
         print("Exception in reading from BLOB", e)
         raise HTTPException(
             status_code=404, detail='Error in reading data from blob storage')
-data = read_data_from_blob("IMPA_ITEMS_WITH_PORT.csv")
+data = read_data_from_blob("3.Demand_Forecasting_Items_Victualling_12_01_2023.csv")
 # print(data)        
 def Demand_forecast(df, vessel_type, vessel_sub_type):
     print("vessel_sub_type", vessel_sub_type)
