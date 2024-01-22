@@ -16,19 +16,19 @@ from io import BytesIO
 import warnings
 warnings.filterwarnings('ignore')
 
-container_client = ContainerClient.from_connection_string(
-    'DefaultEndpointsProtocol=https;AccountName=treewiseblobstorage;AccountKey=jE3f/ogf+EH2cZyJEEagULdbWrIFvtKOnJB655pvrSn+9jzniIx8hGjHlBvnb3Py2I6h7b5zO2NO+AStfk0NPA==;EndpointSuffix=core.windows.net', container_name='maersk-vendor-recommendation-db')
-def read_data_from_blob(dataset_name):
-    try:
-        content = container_client.download_blob(
-            dataset_name).content_as_text(encoding='latin-1')
-        data = pd.read_csv(StringIO(content))
-        return data
-    except Exception as e:
-        print("Exception in reading from BLOB", e)
-        raise HTTPException(
-            status_code=404, detail='Error in reading data from blob storage')
-data = read_data_from_blob("3.Demand_Forecasting_Items_Victualling_12_01_2023.csv")
+# container_client = ContainerClient.from_connection_string(
+#     'DefaultEndpointsProtocol=https;AccountName=treewiseblobstorage;AccountKey=jE3f/ogf+EH2cZyJEEagULdbWrIFvtKOnJB655pvrSn+9jzniIx8hGjHlBvnb3Py2I6h7b5zO2NO+AStfk0NPA==;EndpointSuffix=core.windows.net', container_name='maersk-vendor-recommendation-db')
+# def read_data_from_blob(dataset_name):
+#     try:
+#         content = container_client.download_blob(
+#             dataset_name).content_as_text(encoding='latin-1')
+#         data = pd.read_csv(StringIO(content))
+#         return data
+#     except Exception as e:
+#         print("Exception in reading from BLOB", e)
+#         raise HTTPException(
+#             status_code=404, detail='Error in reading data from blob storage')
+# data = read_data_from_blob("3.Demand_Forecasting_Items_Victualling_12_01_2023.csv")
 # print(data)        
 def Demand_forecast(df, vessel_type, vessel_sub_type):
     print("vessel_sub_type", vessel_sub_type)
@@ -169,4 +169,4 @@ def Demand_forecast(df, vessel_type, vessel_sub_type):
     main_dict['VESSEL_TYPE'] = vessel_type
     main_dict['VESSEL_SUB_TYPE'] = vessel_sub_type
     return main_dict
-Demand_forecast(data, 'Bulk Carrier', 'Bulk Carrier')
+# Demand_forecast(data, 'Bulk Carrier', 'Bulk Carrier')
