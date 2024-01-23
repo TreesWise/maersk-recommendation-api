@@ -76,44 +76,50 @@ def predict_overall_score(df_input,item,port,model,preprocessor,po_qty):
     filtered_df = filtered_df[(filtered_df['ITEM'] == item) & 
                 (filtered_df['PORT'] == port)]
     filtered_df.drop_duplicates(inplace=True)
-    filtered_df['PO_QTY']= po_qty
-    print(filtered_df.dtypes)
-    model = model
-    preprocessor = preprocessor
-    # Apply preprocessing to the input DataFrame
-    X = filtered_df[['PORT', 'VENDOR', 'ITEM', 'PO_QTY', 'MEAN_LEAD_DAYS', 'COUNT_PER_VENDOR_PORT', 'DIVERSITY_OF_VENDOR']]
-    X_processed = preprocessor.transform(X)
-    X_processed = X_processed.astype('float32')
-    X_processed.shape
-    # Make predictions using the trained model
-    y_pred = model.predict(X_processed)
+    print("filtered_df_length",len(filtered_df))
+    if len(filtered_df)!=0:
+        filtered_df['PO_QTY']= po_qty
+        # print(filtered_df.dtypes)
+        model = model
+        preprocessor = preprocessor
+        # Apply preprocessing to the input DataFrame
+        X = filtered_df[['PORT', 'VENDOR', 'ITEM', 'PO_QTY', 'MEAN_LEAD_DAYS', 'COUNT_PER_VENDOR_PORT', 'DIVERSITY_OF_VENDOR']]
+        X_processed = preprocessor.transform(X)
+        X_processed = X_processed.astype('float32')
+        # X_processed.shape
+        # Make predictions using the trained model
+        y_pred = model.predict(X_processed)
+        # Store the predictions in a new column in the input DataFrame
+        filtered_df['PREDICTED_OVERALL_SCORE'] = y_pred.flatten()
 
-    # Store the predictions in a new column in the input DataFrame
-    filtered_df['PREDICTED_OVERALL_SCORE'] = y_pred.flatten()
+        # Categorize the predictions
+        # Define your thresholds here. For example:
+        low_threshold = 0.45
+        high_threshold = 0.85
 
-    # Categorize the predictions
-    # Define your thresholds here. For example:
-    low_threshold = 0.45
-    high_threshold = 0.85
-
-    # Handling the edge cases
-    num_vendors = len(filtered_df['VENDOR'].unique())
-    if num_vendors > 2:
-        filtered_df['EVALUATION SCORE'] = pd.cut(filtered_df['PREDICTED_OVERALL_SCORE'], 
-                                                  bins=[0, low_threshold, high_threshold, 1], 
-                                                  labels=['Low', 'Medium', 'High'], 
-                                                  include_lowest=True)
-    elif num_vendors == 2:
-        # For two vendors, categorize directly as Low or High
-        filtered_df['EVALUATION SCORE'] = pd.cut(filtered_df['PREDICTED_OVERALL_SCORE'], 
-                                                  bins=[0, 0.5, 1], 
-                                                  labels=['Low', 'High'], 
-                                                  include_lowest=True)
+        # Handling the edge cases
+        num_vendors = len(filtered_df['VENDOR'].unique())
+        if num_vendors > 2:
+            filtered_df['EVALUATION SCORE'] = pd.cut(filtered_df['PREDICTED_OVERALL_SCORE'], 
+                                                    bins=[0, low_threshold, high_threshold, 1], 
+                                                    labels=['Low', 'Medium', 'High'], 
+                                                    include_lowest=True)
+        elif num_vendors == 2:
+            # For two vendors, categorize directly as Low or High
+            filtered_df['EVALUATION SCORE'] = pd.cut(filtered_df['PREDICTED_OVERALL_SCORE'], 
+                                                    bins=[0, 0.5, 1], 
+                                                    labels=['Low', 'High'], 
+                                                    include_lowest=True)
+        else:
+            # For a single vendor, assign Medium or another appropriate category
+            filtered_df['EVALUATION SCORE'] = 'Medium'
+        df_copy=filtered_df[['VENDOR','ITEM','EVALUATION SCORE']]
+        return df_copy
     else:
-        # For a single vendor, assign Medium or another appropriate category
-        filtered_df['EVALUATION SCORE'] = 'Medium'
-    df_copy=filtered_df[['VENDOR','ITEM','EVALUATION SCORE']]
-    return df_copy
+        print("error")
+        dicterror= {"error":"norecord found for the given input"}
+        errordf= pd.DataFrame(dicterror,index=[0])
+        return errordf
 
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 def preprocessing(df):
