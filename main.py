@@ -122,7 +122,7 @@ def load_model_from_blob(model_name):
         blob_data = container_client.download_blob(model_name)
         stream = BytesIO()
         blob_data.readinto(stream)
-        
+        stream.seek(0)
         # Write the stream content into a temporary file
         with tempfile.NamedTemporaryFile(delete=False, suffix='.h5') as tmp_file:
             tmp_file_name = tmp_file.name
