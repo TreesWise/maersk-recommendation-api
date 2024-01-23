@@ -44,4 +44,4 @@ nltk==3.8.1
 python-Levenshtein==0.21.1
 tabulate
 joblib
-tensorflow=2.10.1
+tensorflow==2.10.1
