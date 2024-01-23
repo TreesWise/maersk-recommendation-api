@@ -66,4 +66,4 @@ jobs:
         with:
           app-name: 'maersk-analysis-dev'
           slot-name: 'Production'
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_7372647354814D8C904786F416DB6507 }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_E906202AB9D941968D224DD7EF446F67 }}
