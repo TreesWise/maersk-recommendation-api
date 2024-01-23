@@ -107,9 +107,9 @@ async def fetch_data(userinput: supplier_evaluation_input , current_user: User =
     po_qty= userinput.po_qty
     df = read_data_from_blob("FINAL_OUTPUT_PREDICTOR.csv")
     print("data read")
-    model = load_model_from_blob("Supplier_Evaluation.h5")
+    model =  tf.keras.models.load_model("Supplier_Evaluation.h5")
     print("model loaded")
-    preprocessor=load_preprocessor_from_blob('preprocessor.joblib')
+    preprocessor=joblib.load('preprocessor.joblib')
     print("preprocessor loaded")
     c =predict_overall_score(df,item,port,model,preprocessor,po_qty)
     result_dict = c.to_dict(orient='records')
@@ -122,12 +122,12 @@ def load_model_from_blob(model_name):
         blob_data = container_client.download_blob(model_name)
         stream = BytesIO()
         blob_data.readinto(stream)
-        stream.seek(0)
+        stream.seek(0) 
         # Write the stream content into a temporary file
         with tempfile.NamedTemporaryFile(delete=False, suffix='.h5') as tmp_file:
             tmp_file_name = tmp_file.name
             tmp_file.write(stream.getbuffer())
-
+            
         # Loading the model from the temporary file
         model = tf.keras.models.load_model(tmp_file_name)
         return model
