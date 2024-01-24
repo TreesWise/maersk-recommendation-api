@@ -35,6 +35,10 @@ class supplier_evaluation_input(BaseModel):
     item: str
     po_qty:int
     port:str
+
+class demand_forecasting_input(BaseModel):
+    vessel_type: str
+    vessel_sub_type: str  
    
 
 

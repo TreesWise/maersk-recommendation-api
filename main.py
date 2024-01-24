@@ -5,7 +5,7 @@ import pandas as pd
 from config import ACCESS_TOKEN_EXPIRE_MINUTES
 from database_conn import database
 from helper import authenticate_user, create_access_token, get_current_active_user
-from custom_data_type import Token, User, spend_analysis_input, trend_analysis_input,supplier_evaluation_input
+from custom_data_type import Token, User, spend_analysis_input, trend_analysis_input,supplier_evaluation_input,demand_forecasting_input
 # from azure.storage.blob.baseblobservice import BaseBlobService
 # from azure.storage.blob import BlobPermissions
 from datetime import datetime, timedelta
@@ -19,9 +19,11 @@ from spend_analysis_function import spend_analysis
 from preprocessing_predictor import predict_overall_score
 from trend_analysis_function import port_item_count_port
 from supplier_evaluation_function import supplier_evaluation
+from demand_forecast_function import Demand_forecast
 import re
 import tensorflow as tf
 import joblib
+import pickle
 # import nltk
 # nltk.download('punkt')
 # nltk.download('stopwords')
@@ -115,6 +117,36 @@ async def fetch_data(userinput: supplier_evaluation_input , current_user: User =
     result_dict = c.to_dict(orient='records')
     return {'data': result_dict}
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+@app.post("/demand_forecasting_dev")
+async def fetch_data(userinput: demand_forecasting_input, current_user: User = Depends(get_current_active_user)):
+    vessel_type = userinput.vessel_type
+    vessel_sub_type= userinput.vessel_sub_type
+    df = read_data_from_blob("3.Demand_Forecasting_Items_Victualling_12_01_2023.csv")
+    c = Demand_forecast(df, vessel_type, vessel_sub_type)
+    # print(c)
+    # result_dict = c.to_dict(orient='records')
+    return {'data': c}
+
+@app.post("/demand_forecasting")
+async def fetch_data(userinput: demand_forecasting_input, current_user: User = Depends(get_current_active_user)):
+    vessel_type = userinput.vessel_type
+    vessel_sub_type= userinput.vessel_sub_type
+    container_client = ContainerClient.from_connection_string(
+    'DefaultEndpointsProtocol=https;AccountName=treewiseblobstorage;AccountKey=jE3f/ogf+EH2cZyJEEagULdbWrIFvtKOnJB655pvrSn+9jzniIx8hGjHlBvnb3Py2I6h7b5zO2NO+AStfk0NPA==;EndpointSuffix=core.windows.net', container_name='maersk-vendor-recommendation-db')
+    path_endpoint_list = list(container_client.list_blobs('Demand_Forecast_res/'))
+    path_endpoint_list = [blobs['name'].split('/')[-1] for blobs in path_endpoint_list]
+    with open('type_ids.pickle','rb') as file11:
+        type_ids = pickle.load(file11)
+    filtered_list = []
+    for pp in path_endpoint_list:
+        if pp.split('_')[0] == str(type_ids[str(vessel_type)+'_'+str(vessel_sub_type)]):
+            filtered_list.append(pp)
+    filtered_list.sort(reverse=True)   
+    blob_client = container_client.get_blob_client('Demand_Forecast_res/'+filtered_list[0])
+    pickled_data = blob_client.download_blob().readall()
+    end_point_result = pickle.loads(pickled_data)     
+    return end_point_result
 
 def load_model_from_blob(model_name):
     try:
