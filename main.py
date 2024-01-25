@@ -147,8 +147,8 @@ async def fetch_data(userinput: demand_forecasting_input, current_user: User = D
         blob_client = container_client.get_blob_client('Demand_Forecast_res/'+filtered_list[0])
         pickled_data = blob_client.download_blob().readall()
         end_point_result = pickle.loads(pickled_data)     
-        end_point_result['SEA CHEF PROVISIONS'] = {k1:v1 for k1,v1 in end_point_result['SEA CHEF PROVISIONS'].items() if v1<1}
-        end_point_result['PROVISION'] = {k2:v2 for k2,v2 in end_point_result['PROVISION'].items() if v2<1}
+        end_point_result['SEA CHEF PROVISIONS'] = {k1:v1 for k1,v1 in end_point_result['SEA CHEF PROVISIONS'].items() if v1>=1}
+        end_point_result['PROVISION'] = {k2:v2 for k2,v2 in end_point_result['PROVISION'].items() if v2>=1}
     else:
         end_point_result = {'Inputs are incorrect':'Check vessel type or vessel sub type'}
     return end_point_result
