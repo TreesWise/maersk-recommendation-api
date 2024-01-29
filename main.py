@@ -80,13 +80,9 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     return {"access_token": access_token, "token_type": "bearer"}
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 @app.post("/spend_analysis")
-async def fetch_data(userinput: spend_analysis_input , current_user: User = Depends(get_current_active_user)):
-    item_cat = userinput.item_cat
-    item_sec1 = userinput.item_sec1
-    item_sec2 = userinput.item_sec2
-    item = userinput.item
-    data = read_data_from_blob("IMPA_ITEMS_WITH_PORT.csv")
-    c = spend_analysis(data,item_cat,item_sec1,item_sec2,item)
+async def fetch_data(current_user: User = Depends(get_current_active_user)):
+    data = read_data_from_blob("3.Demand_Forecasting_Items_Victualling_12_01_2023.csv")
+    c = spend_analysis(data)
     result_dict = c.to_dict(orient='records')
     return {'data': result_dict}
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
