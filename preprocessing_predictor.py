@@ -116,7 +116,7 @@ def predict_overall_score(df_input,item,port,model,preprocessor,po_qty):
         else:
         # For a single vendor, assign Medium or another appropriate category
             filtered_df['PERFORMANCE_CATEGORY'] = 'Medium'
-        filtered_df=filtered_df[['PORT','VENDOR','ITEM','MEAN_LEAD_DAYS','COUNT_PER_VENDOR_PORT','DIVERSITY_OF_VENDOR','PERFORMANCE_PERCENTILE','PERFORMANCE_CATEGORY']]
+        filtered_df=filtered_df[['PORT','VENDOR','ITEM','PERFORMANCE_PERCENTILE','PERFORMANCE_CATEGORY']]
         return filtered_df
     else:
         print("error")
