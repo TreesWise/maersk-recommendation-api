@@ -1,4 +1,6 @@
 import pandas as pd
+from scipy.stats import percentileofscore
+
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 #  Reverse Normalization Function for giving more weightage to items with low unit price and lead days
 def reverse_normalize_by_group(df, group_columns, column_name, weightage):
@@ -76,7 +78,6 @@ def predict_overall_score(df_input,item,port,model,preprocessor,po_qty):
     filtered_df = filtered_df[(filtered_df['ITEM'] == item) & 
                 (filtered_df['PORT'] == port)]
     filtered_df.drop_duplicates(inplace=True)
-    print("filtered_df_length",len(filtered_df))
     if len(filtered_df)!=0:
         filtered_df['PO_QTY']= po_qty
         # print(filtered_df.dtypes)
@@ -91,33 +92,35 @@ def predict_overall_score(df_input,item,port,model,preprocessor,po_qty):
         y_pred = model.predict(X_processed)
         # Store the predictions in a new column in the input DataFrame
         filtered_df['PREDICTED_OVERALL_SCORE'] = y_pred.flatten()
-
-        # Categorize the predictions
-        # Define your thresholds here. For example:
-        low_threshold = 0.45
-        high_threshold = 0.85
+        # filtered_df['PERFORMANCE_PERCENTILE'] = filtered_df['PREDICTED_OVERALL_SCORE'].apply(
+        # lambda x: round(percentileofscore(filtered_df['PREDICTED_OVERALL_SCORE'], x, kind='rank')),2)
+        filtered_df['PERFORMANCE_PERCENTILE'] = filtered_df['PREDICTED_OVERALL_SCORE'].apply(
+        lambda x: float('%.2f' % percentileofscore(filtered_df['PREDICTED_OVERALL_SCORE'], x, kind='rank')))
+        filtered_df = filtered_df.sort_values(by='PERFORMANCE_PERCENTILE', ascending=False)
+        low_threshold = 40
+        high_threshold = 70
 
         # Handling the edge cases
         num_vendors = len(filtered_df['VENDOR'].unique())
         if num_vendors > 2:
-            filtered_df['EVALUATION SCORE'] = pd.cut(filtered_df['PREDICTED_OVERALL_SCORE'], 
-                                                    bins=[0, low_threshold, high_threshold, 1], 
-                                                    labels=['Low', 'Medium', 'High'], 
-                                                    include_lowest=True)
+            filtered_df['PERFORMANCE_CATEGORY'] = pd.cut(filtered_df['PERFORMANCE_PERCENTILE'], 
+                                                        bins=[0, low_threshold, high_threshold, 100], 
+                                                        labels=['Low', 'Medium', 'High'], 
+                                                        include_lowest=True)
         elif num_vendors == 2:
-            # For two vendors, categorize directly as Low or High
-            filtered_df['EVALUATION SCORE'] = pd.cut(filtered_df['PREDICTED_OVERALL_SCORE'], 
-                                                    bins=[0, 0.5, 1], 
-                                                    labels=['Low', 'High'], 
-                                                    include_lowest=True)
+        # For two vendors, categorize directly as Low or High
+            filtered_df['PERFORMANCE_CATEGORY'] = pd.cut(filtered_df['PERFORMANCE_PERCENTILE'], 
+                                                        bins=[0, 50, 100], 
+                                                        labels=['Low', 'High'], 
+                                                        include_lowest=True)
         else:
-            # For a single vendor, assign Medium or another appropriate category
-            filtered_df['EVALUATION SCORE'] = 'Medium'
-        df_copy=filtered_df[['VENDOR','ITEM','EVALUATION SCORE']]
-        return df_copy
+        # For a single vendor, assign Medium or another appropriate category
+            filtered_df['PERFORMANCE_CATEGORY'] = 'Medium'
+        filtered_df=filtered_df[['PORT','VENDOR','ITEM','MEAN_LEAD_DAYS','COUNT_PER_VENDOR_PORT','DIVERSITY_OF_VENDOR','PERFORMANCE_PERCENTILE','PERFORMANCE_CATEGORY']]
+        return filtered_df
     else:
         print("error")
-        dicterror= {"error":"norecord found for the given input"}
+        dicterror= {"error":"no record found for the given input"}
         errordf= pd.DataFrame(dicterror,index=[0])
         return errordf
 
@@ -147,7 +150,6 @@ def preprocessing(df):
     merged_df = pd.merge(filtered_df, outliers_df, how='left', indicator=True)
     df_without_outliers = merged_df[merged_df['_merge'] == 'left_only'].drop(columns=['_merge'])
     df_without_outliers.drop_duplicates(inplace=True)
-    # print('columns',df_without_outliers.columns)
     weightage_unit_price = 0.20  # Adjust the weightage as needed
     df_without_outliers['COUNT_PER_VENDOR_PORT'] = df_without_outliers.groupby(['VENDOR', 'PORT'])['PO_ID'].transform('count')
     df_without_outliers['DIVERSITY_OF_VENDOR'] = df_without_outliers.groupby('VENDOR')['PORT'].transform('nunique')
