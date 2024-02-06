@@ -129,6 +129,7 @@ async def fetch_data(userinput: demand_forecasting_input, current_user: User = D
     vessel_name = userinput.vessel_name
     n_qtrs = userinput.number_quarters
     # Calculate the next 4 quarters and their corresponding years
+    current_date = datetime.now()
     year_quarters = []
     for i in range(0, 4): #(1,5)
         # Calculate the start date of the next quarter
@@ -142,7 +143,6 @@ async def fetch_data(userinput: demand_forecasting_input, current_user: User = D
             'DefaultEndpointsProtocol=https;AccountName=treewiseblobstorage;AccountKey=jE3f/ogf+EH2cZyJEEagULdbWrIFvtKOnJB655pvrSn+9jzniIx8hGjHlBvnb3Py2I6h7b5zO2NO+AStfk0NPA==;EndpointSuffix=core.windows.net', container_name='maersk-vendor-recommendation-db')
     vessel_info = read_data_from_blob('1.Maersk_Demo_Data_Vessel_Type_Sub_Type_Details.csv')
     vsl_data = vessel_info[vessel_info['Vessel']==vessel_name]
-    current_date = datetime.now()
 
     if len(vsl_data)>0:
         vessel_type,vessel_sub_type = str(list(vsl_data['BSM VESSEL TYPE'])[0]), str(list(vsl_data['BSM VESSEL SUBTYPE'])[0])
