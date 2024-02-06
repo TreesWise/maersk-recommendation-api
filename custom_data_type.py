@@ -37,8 +37,10 @@ class supplier_evaluation_input(BaseModel):
     port:str
 
 class demand_forecasting_input(BaseModel):
-    vessel_type: str
-    vessel_sub_type: str  
+    # vessel_type: str
+    # vessel_sub_type: str  
+    vessel_name: str
+    number_quarters: int
    
 
 
