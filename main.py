@@ -145,7 +145,7 @@ async def fetch_data(userinput: demand_forecasting_input, current_user: User = D
     vsl_data = vessel_info[vessel_info['Vessel']==vessel_name]
 
     if len(vsl_data)>0:
-        vessel_type,vessel_sub_type = str(list(vsl_data['BSM VESSEL TYPE'])[0]), str(list(vsl_data['BSM VESSEL SUBTYPE'])[0])
+        vessel_type,vessel_sub_type = str(list(vsl_data['BSM_VESSEL_TYPE'])[0]), str(list(vsl_data['BSM_VESSEL_SUBTYPE'])[0])
         # vessel_type = userinput.vessel_type
         # vessel_sub_type= userinput.vessel_sub_type
         with open('type_ids.pickle','rb') as file11:
@@ -175,6 +175,8 @@ async def fetch_data(userinput: demand_forecasting_input, current_user: User = D
                     end_point_result['SEA CHEF PROVISIONS'] = {k1:{'Qty':v1,'Unit':UoM['SEA CHEF PROVISIONS'][k1]} for k1,v1 in end_point_result['SEA CHEF PROVISIONS'].items()}
                     end_point_result['PROVISION'] = {k2:{'Qty':v2,'Unit':UoM['PROVISION'][k2]} for k2,v2 in end_point_result['PROVISION'].items()}
                     qtr_end_point_result[filtered_list[ids].split('.')[0].split('_')[1]] = end_point_result
+                    del qtr_end_point_result['VESSEL_TYPE']
+                    del qtr_end_point_result['VESSEL_SUB_TYPE']
                 qtr_end_point_result['VESSEL_TYPE'] = vessel_type
                 qtr_end_point_result['VESSEL_SUB_TYPE'] = vessel_sub_type
             else:
