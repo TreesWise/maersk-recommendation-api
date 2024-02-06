@@ -114,15 +114,15 @@ async def fetch_data(userinput: supplier_evaluation_input , current_user: User =
     return {'data': result_dict}
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-@app.post("/demand_forecasting_dev")
-async def fetch_data(userinput: demand_forecasting_input, current_user: User = Depends(get_current_active_user)):
-    vessel_type = userinput.vessel_type
-    vessel_sub_type= userinput.vessel_sub_type
-    df = read_data_from_blob("3.Demand_Forecasting_Items_Victualling_12_01_2023.csv")
-    c = Demand_forecast(df, vessel_type, vessel_sub_type)
-    # print(c)
-    # result_dict = c.to_dict(orient='records')
-    return {'data': c}
+# @app.post("/demand_forecasting_dev")
+# async def fetch_data(userinput: demand_forecasting_input, current_user: User = Depends(get_current_active_user)):
+#     vessel_type = userinput.vessel_type
+#     vessel_sub_type= userinput.vessel_sub_type
+#     df = read_data_from_blob("3.Demand_Forecasting_Items_Victualling_12_01_2023.csv")
+#     c = Demand_forecast(df, vessel_type, vessel_sub_type)
+#     # print(c)
+#     # result_dict = c.to_dict(orient='records')
+#     return {'data': c}
 
 @app.post("/demand_forecasting")
 async def fetch_data(userinput: demand_forecasting_input, current_user: User = Depends(get_current_active_user)):
