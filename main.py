@@ -128,64 +128,69 @@ async def fetch_data(userinput: supplier_evaluation_input , current_user: User =
 async def fetch_data(userinput: demand_forecasting_input, current_user: User = Depends(get_current_active_user)):
     vessel_name = userinput.vessel_name
     n_qtrs = userinput.number_quarters
+    if n_qtrs in [1,2,3,4]:
     # Calculate the next 4 quarters and their corresponding years
-    current_date = datetime.now()
-    year_quarters = []
-    for i in range(0, 4): #(1,5)
-        # Calculate the start date of the next quarter
-        months_to_add = 3 * i
-        future_date = current_date + timedelta(days=months_to_add * 30)  # Approximation
-        future_quarter = (future_date.month - 1) // 3 + 1
-        year_quarters.append(str(future_date.year)+'Q'+str(future_quarter))
-        # year_quarters.append(str(future_date.year))
+        current_date = datetime.now()
+        year_quarters = []
+        for i in range(0, 4): #(1,5)
+            # Calculate the start date of the next quarter
+            months_to_add = 3 * i
+            future_date = current_date + timedelta(days=months_to_add * 30)  # Approximation
+            future_quarter = (future_date.month - 1) // 3 + 1
+            year_quarters.append(str(future_date.year)+'Q'+str(future_quarter))
+            # year_quarters.append(str(future_date.year))
 
-    container_client = ContainerClient.from_connection_string(
-            'DefaultEndpointsProtocol=https;AccountName=treewiseblobstorage;AccountKey=jE3f/ogf+EH2cZyJEEagULdbWrIFvtKOnJB655pvrSn+9jzniIx8hGjHlBvnb3Py2I6h7b5zO2NO+AStfk0NPA==;EndpointSuffix=core.windows.net', container_name='maersk-vendor-recommendation-db')
-    vessel_info = read_data_from_blob('1.Maersk_Demo_Data_Vessel_Type_Sub_Type_Details.csv')
-    vsl_data = vessel_info[vessel_info['Vessel']==vessel_name]
+        container_client = ContainerClient.from_connection_string(
+                'DefaultEndpointsProtocol=https;AccountName=treewiseblobstorage;AccountKey=jE3f/ogf+EH2cZyJEEagULdbWrIFvtKOnJB655pvrSn+9jzniIx8hGjHlBvnb3Py2I6h7b5zO2NO+AStfk0NPA==;EndpointSuffix=core.windows.net', container_name='maersk-vendor-recommendation-db')
+        vessel_info = read_data_from_blob('1.Maersk_Demo_Data_Vessel_Type_Sub_Type_Details.csv')
+        vsl_data = vessel_info[vessel_info['Vessel']==vessel_name]
 
-    if len(vsl_data)>0:
-        vessel_type,vessel_sub_type = str(list(vsl_data['BSM_VESSEL_TYPE'])[0]), str(list(vsl_data['BSM_VESSEL_SUBTYPE'])[0])
-        # vessel_type = userinput.vessel_type
-        # vessel_sub_type= userinput.vessel_sub_type
-        with open('type_ids.pickle','rb') as file11:
-            type_ids = pickle.load(file11)
-        vsl_comb = [keys for keys in type_ids.keys() if vessel_type.lower().strip()+'_'+vessel_sub_type.lower().strip() in  keys.lower()]
-        if len(vsl_comb)>0:    
-            path_endpoint_list = list(container_client.list_blobs('Demand_Forecast_res/'))
-            path_endpoint_list = [blobs['name'].split('/')[-1] for blobs in path_endpoint_list]
-            
-            filtered_list = []
-            for pp in path_endpoint_list:
-                if pp.split('_')[0] == str(type_ids[str(vessel_type)+'_'+str(vessel_sub_type)]):
-                    if pp.split('_')[1].split('.')[0] in year_quarters:
-                        filtered_list.append(pp)
-            if len(filtered_list)!=0:    
-                with open('UoMs.pickle','rb') as um:
-                    UoM = pickle.load(um)    
-                filtered_list.sort()  
-                qtr_end_point_result = {}
-                for ids in range(n_qtrs):
-                    blob_client = container_client.get_blob_client('Demand_Forecast_res/'+filtered_list[0])
-                    pickled_data = blob_client.download_blob().readall()
-                    end_point_result = pickle.loads(pickled_data)     
-                    end_point_result['SEA CHEF PROVISIONS'] = {k1:v1 for k1,v1 in end_point_result['SEA CHEF PROVISIONS'].items() if v1>=1}
-                    end_point_result['PROVISION'] = {k2:v2 for k2,v2 in end_point_result['PROVISION'].items() if v2>=1}
-                    # end_point_result['SEA CHEF PROVISIONS'] = {k1:str(v1)+' '+UoM['SEA CHEF PROVISIONS'][k1] for k1,v1 in end_point_result['SEA CHEF PROVISIONS'].items()}
-                    end_point_result['SEA CHEF PROVISIONS'] = {k1:{'Qty':v1,'Unit':UoM['SEA CHEF PROVISIONS'][k1]} for k1,v1 in end_point_result['SEA CHEF PROVISIONS'].items()}
-                    end_point_result['PROVISION'] = {k2:{'Qty':v2,'Unit':UoM['PROVISION'][k2]} for k2,v2 in end_point_result['PROVISION'].items()}
-                    qtr_end_point_result[filtered_list[ids].split('.')[0].split('_')[1]] = end_point_result
-                    del qtr_end_point_result['VESSEL_TYPE']
-                    del qtr_end_point_result['VESSEL_SUB_TYPE']
-                qtr_end_point_result['VESSEL_TYPE'] = vessel_type
-                qtr_end_point_result['VESSEL_SUB_TYPE'] = vessel_sub_type
+        if len(vsl_data)>0:
+            vessel_type,vessel_sub_type = str(list(vsl_data['BSM_VESSEL_TYPE'])[0]), str(list(vsl_data['BSM_VESSEL_SUBTYPE'])[0])
+            # vessel_type = userinput.vessel_type
+            # vessel_sub_type= userinput.vessel_sub_type
+            with open('type_ids.pickle','rb') as file11:
+                type_ids = pickle.load(file11)
+            vsl_comb = [keys for keys in type_ids.keys() if vessel_type.lower().strip()+'_'+vessel_sub_type.lower().strip() in  keys.lower()]
+            if len(vsl_comb)>0:    
+                path_endpoint_list = list(container_client.list_blobs('Demand_Forecast_res/'))
+                path_endpoint_list = [blobs['name'].split('/')[-1] for blobs in path_endpoint_list]
+                
+                filtered_list = []
+                for pp in path_endpoint_list:
+                    if pp.split('_')[0] == str(type_ids[str(vessel_type)+'_'+str(vessel_sub_type)]):
+                        if pp.split('_')[1].split('.')[0] in year_quarters:
+                            filtered_list.append(pp)
+                if len(filtered_list)!=0:    
+                    with open('UoMs.pickle','rb') as um:
+                        UoM = pickle.load(um)    
+                    filtered_list.sort()  
+                    qtr_end_point_result = {}
+                    for ids in range(n_qtrs):
+                        blob_client = container_client.get_blob_client('Demand_Forecast_res/'+filtered_list[0])
+                        pickled_data = blob_client.download_blob().readall()
+                        end_point_result = pickle.loads(pickled_data)     
+                        end_point_result['SEA CHEF PROVISIONS'] = {k1:v1 for k1,v1 in end_point_result['SEA CHEF PROVISIONS'].items() if v1>=1}
+                        end_point_result['PROVISION'] = {k2:v2 for k2,v2 in end_point_result['PROVISION'].items() if v2>=1}
+                        # end_point_result['SEA CHEF PROVISIONS'] = {k1:str(v1)+' '+UoM['SEA CHEF PROVISIONS'][k1] for k1,v1 in end_point_result['SEA CHEF PROVISIONS'].items()}
+                        end_point_result['SEA CHEF PROVISIONS'] = {k1:{'Qty':v1,'Unit':UoM['SEA CHEF PROVISIONS'][k1]} for k1,v1 in end_point_result['SEA CHEF PROVISIONS'].items()}
+                        end_point_result['PROVISION'] = {k2:{'Qty':v2,'Unit':UoM['PROVISION'][k2]} for k2,v2 in end_point_result['PROVISION'].items()}
+                        qtr_end_point_result[filtered_list[ids].split('.')[0].split('_')[1]] = end_point_result
+                        print('keys -',qtr_end_point_result.keys())
+                        del qtr_end_point_result[filtered_list[ids].split('.')[0].split('_')[1]]['VESSEL_TYPE']
+                        del qtr_end_point_result[filtered_list[ids].split('.')[0].split('_')[1]]['VESSEL_SUB_TYPE']
+                    qtr_end_point_result['VESSEL_TYPE'] = vessel_type
+                    qtr_end_point_result['VESSEL_SUB_TYPE'] = vessel_sub_type
+                    qtr_end_point_result['vessel_name'] = vessel_name
+                else:
+                    qtr_end_point_result = {'Inputs are incorrect':'Check vessel type or vessel sub type'}
+                return qtr_end_point_result
             else:
-                qtr_end_point_result = {'Inputs are incorrect':'Check vessel type or vessel sub type'}
-            return qtr_end_point_result
+                return {'Vessel type-sub type combinations are not matching':'Check vessel type or vessel sub type'}
         else:
-            return {'Vessel type-sub type combinations are not matching':'Check vessel type or vessel sub type'}
-    else:
-        return {'Vessel data is not available':'Check vessel name'}
+            return {'Vessel data is not available':'Check vessel name'}
+    else: 
+        return {'Quarter value error':'Invalid quarter value'}   
 
 def load_model_from_blob(model_name):
     try:
